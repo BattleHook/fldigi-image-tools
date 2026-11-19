@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a problem with FLdigi Image Tools.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues are public. Do not share full ADIF logs, private captures, callsigns tied to personal data, or local user paths. Use a synthetic example or a redacted excerpt.
+  - type: input
+    id: version
+    attributes:
+      label: FLdigi Image Tools version
+      placeholder: "1.0 x64"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Windows and FLdigi versions
+      description: Include the FLdigi version if the problem involves the logbook.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected feature
+      options:
+        - Logbook cleanup
+        - WEFAX image browser
+        - WEFAX post-processing
+        - PNG or JSON import/export
+        - Startup or other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostic
+    attributes:
+      label: Relevant diagnostic excerpt (optional)
+      description: Include only the relevant lines from Logs\Cleaner-errors.log and remove personal data.
+      render: text

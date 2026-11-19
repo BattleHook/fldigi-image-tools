@@ -1,0 +1,12 @@
+/Logs/
+/Cleaner-preferences.ini
+/.test-*/
+*.adi
+*.adif
+*.bak
+*.log
+*.png
+!/examples/synthetic-tilt-and-crop.png
+!/examples/synthetic-line-jumps.png
+*.json
+*.exe
