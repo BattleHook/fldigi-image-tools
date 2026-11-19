@@ -12,6 +12,8 @@ The portable package requires 64-bit Windows. It works with either 32-bit or 64-
 
 See the [online user manual](https://battlehook.github.io/fldigi-image-tools/) for both workflows, including how to restore a logbook backup or reload saved image adjustments. The [Markdown manual](./MANUAL.md) is also included in the portable ZIP.
 
+See the [updates overview](./CHANGELOG.md) for fixes and planned improvements.
+
 ## Scope and safeguards
 
 The supplied rule reads `MODE=FAX` records with an `RX:` PNG reference in `NOTES`. A scan does not modify the logbook. Before applying removals or saving an image with an `ENH:` link, close FLdigi; the app checks that the logbook has not changed and backs it up before replacing it. Uncertain references and unavailable folders are not treated as missing files. Work on a copy first if you are unsure.
@@ -26,15 +28,15 @@ Install [AutoHotkey v2](https://www.autohotkey.com/) only if you want to run the
 
 Run `AutoHotkey64.exe FldigiLogbookCleaner.ahk --preview` for the built-in synthetic chart, or `AutoHotkey64.exe Cleaner.Tests.ahk` for disposable-file tests. Use the full path to `AutoHotkey64.exe` if it is not on your PATH. To use the supplied practice PNGs from source, replace `.\FldigiImageTools.exe` in the [manual's preview command](./MANUAL.md#practice-with-synthetic-images) with `AutoHotkey64.exe FldigiLogbookCleaner.ahk`.
 
-## Building the v1.0 portable EXE
+## Building the v1.01 portable EXE
 
-Start from the [v1.0 source](https://github.com/BattleHook/fldigi-image-tools/tree/v1.0). In that folder, create `BuildRelease.ahk` with the Windows product and version metadata used for the release:
+Start from the [v1.01 source](https://github.com/BattleHook/fldigi-image-tools/tree/v1.01). In that folder, create `BuildRelease.ahk` with the Windows product and version metadata used for the release:
 
 ```ahk
 ;@Ahk2Exe-SetProductName FLdigi Image Tools
 ;@Ahk2Exe-SetDescription FLdigi Image Tools
-;@Ahk2Exe-SetFileVersion 1.0.0.0
-;@Ahk2Exe-SetProductVersion 1.0.0.0
+;@Ahk2Exe-SetFileVersion 1.01.0.0
+;@Ahk2Exe-SetProductVersion 1.01.0.0
 #Include FldigiLogbookCleaner.ahk
 ```
 

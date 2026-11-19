@@ -99,6 +99,9 @@ CleanerParse(bytes) {
     if StrLen(text) != bytes.Size
         throw Error("Unsupported ADIF encoding or embedded NUL.")
     cursor := SubStr(text, 1, 3) = Chr(239) Chr(187) Chr(191) ? 4 : 1
+    ; Advance past FLdigi's optional File: line without changing the source bytes.
+    if RegExMatch(text, "i)\GFile:[^<>\r\n]+(?:\r\n|\n|\r)(?=[ \t\r\n]*<ADIF_VER:)", &preamble, cursor)
+        cursor += preamble.Len
     records := [], fields := Map(), spans := Map(), header := false, start := 0
     while cursor <= StrLen(text) {
         if RegExMatch(text, "\G[ \t\r\n]+", &space, cursor)

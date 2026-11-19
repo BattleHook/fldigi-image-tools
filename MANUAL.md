@@ -12,6 +12,8 @@ Extract the package to a writable folder, keep [`Cleaner.ini`](./Cleaner.ini) be
 2. Select a result to see the full path. Check only the entries you want to remove.
 3. Close FLdigi. Click **Apply selected removals** and confirm. The tool rechecks the selection and saves a timestamped `.bak` beside the logbook before replacing it.
 
+If FLdigi puts a `File:` line before the ADIF header, the tool preserves that line during cleanup. You do not need to edit the logbook before scanning.
+
 **A `.bak` is a copy of the entire logbook, not an undo list.** Restoring it puts the logbook back exactly as it was when the backup was made. For example, if the cleaner removed two entries and you logged three new contacts afterward, restoring the backup brings back the two removed entries but leaves the three new contacts out of the restored logbook. Later edits, such as a new `ENH:` link, are also lost from the restored logbook. The image files themselves are unaffected.
 
 To undo a cleanup, close FLdigi and save a separate copy of the current ADIF before replacing it with the appropriate `.bak`. If you want to keep newer entries or edits, compare the backup and current copy and merge only the records you need instead of replacing the whole logbook.

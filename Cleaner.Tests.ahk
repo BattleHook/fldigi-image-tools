@@ -18,6 +18,7 @@ try {
     FileAppend("[Logbook]`r`nPath=" fixtureLog "`r`n[Rule WEFAX]`r`nEnabled=1`r`nMode=FAX`r`nFolder="
         images "`r`nField=NOTES`r`nPrefix=RX:`r`nExtensions=png`r`n", ini, "UTF-16")
     config := CleanerConfig(ini)
+    preamble := "File: fixture.adi`r`n"
     header := "<ADIF_VER:5>2.2.7`r`n<PROGRAMID:6>fldigi<EOH>`r`n"
     qso := Record("RTTY", "Line one`nLiteral <EOR> inside notes: " Chr(233))
     missing := Record("FAX", "RX:missing.png")
@@ -26,8 +27,14 @@ try {
     multiple := Record("FAX", "RX:missing.png`nRX:kept.png")
     unrelated := Record("PSK", "RX:missing.png")
     outside := Record("FAX", "RX:" root "\outside.png")
-    before := header qso missing absolute kept multiple unrelated outside
-    expected := header qso "`r`n" absolute kept multiple unrelated outside
+    before := preamble header qso missing absolute kept multiple unrelated outside
+    expected := preamble header qso "`r`n" absolute kept multiple unrelated outside
+    WriteText(fixtureLog, Chr(0xFEFF) "File: fixture.adi`n`n" header qso)
+    Check(CleanerParse(CleanerRead(fixtureLog)).Length = 1, "FLdigi preamble with UTF-8 BOM and LF")
+    WriteText(fixtureLog, "Unexpected text`r`n" header qso)
+    RequireError(() => CleanerParse(CleanerRead(fixtureLog)), "Unexpected ADIF data at byte 0")
+    WriteText(fixtureLog, header qso preamble header missing)
+    RequireError(() => CleanerParse(CleanerRead(fixtureLog)), "Unexpected ADIF data at byte")
     WriteText(fixtureLog, before)
     snapshot := CleanerRead(fixtureLog)
     scan := CleanerScan(snapshot, config.rules)
@@ -52,7 +59,7 @@ try {
     Check(CleanerEqual(CleanerRead(backup), snapshot), "backup is byte identical")
     FileAppend(expected, root "\expected.adi", "UTF-8-RAW")
     Check(CleanerEqual(CleanerRead(root "\expected.adi"), CleanerRead(fixtureLog)),
-        "only checked record removed; all retained bytes are unchanged")
+        "only checked record removed; preamble and all retained bytes are unchanged")
     Check(FileExist(images "\kept.png"), "image was not touched")
     TestWefax(config, images, root)
     TestWefaxDialogFolders(root, images)
