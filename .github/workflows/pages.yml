@@ -1,0 +1,78 @@
+name: Publish manual to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - MANUAL.md
+      - Cleaner.ini
+      - "examples/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble manual site
+        run: |
+          mkdir -p _manual/examples _manual/_layouts
+          cp Cleaner.ini _manual/
+          cp examples/synthetic-{tilt-and-crop,line-jumps}.png _manual/examples/
+          {
+            printf '%s\n' '---' 'layout: manual' '---'
+            cat MANUAL.md
+          } > _manual/index.md
+          cat > _manual/_layouts/manual.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>FLdigi Image Tools - User Manual</title>
+            <style>
+              body { max-width: 52rem; margin: 2rem auto; padding: 0 1rem; font: 1rem/1.6 system-ui, sans-serif; }
+              img { max-width: 100%; height: auto; }
+              pre { padding: .8rem; overflow-x: auto; background: #f3f5f7; }
+              table { border-collapse: collapse; }
+              th, td { padding: .4rem; border: 1px solid #bbb; text-align: left; }
+            </style>
+          </head>
+          <body>
+          <nav aria-label="Project links">
+            <a href="https://github.com/BattleHook/fldigi-image-tools">Source repository</a> |
+            <a href="https://github.com/BattleHook/fldigi-image-tools/releases/latest">Download</a>
+          </nav>
+          <main>{{ content }}</main>
+          </body>
+          </html>
+          EOF
+      - uses: actions/configure-pages@v5
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./_manual
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -7,10 +7,10 @@
 The portable package requires 64-bit Windows. It works with either 32-bit or 64-bit FLdigi.
 
 1. Download the portable ZIP from [Releases](https://github.com/BattleHook/fldigi-image-tools/releases) and extract it to a writable folder. Keep `FldigiImageTools.exe` and [`Cleaner.ini`](./Cleaner.ini) together. No installer or separate AutoHotkey installation is required.
-2. Check the logbook path and WEFAX image folder in [`Cleaner.ini`](./Cleaner.ini). `{profile}` means your Windows user folder.
+2. Leave the defaults alone if they match your FLdigi setup. If they differ, edit [`Cleaner.ini`](./Cleaner.ini) beside the EXE: change `Path` under `[Logbook]` for the ADIF file or `Folder` under `[Rule WEFAX]` for the PNG folder. `{profile}` means your Windows user folder. The path shown in the app is read-only. Save the INI and click **Scan** to pick up changes without restarting.
 3. Open `FldigiImageTools.exe`. Choose **Scan** to review missing-image entries, or **WEFAX Images** to open a linked chart.
 
-See the [short manual](./MANUAL.md) for both workflows, including how to restore a logbook backup or reload saved image adjustments.
+See the [online user manual](https://battlehook.github.io/fldigi-image-tools/) for both workflows, including how to restore a logbook backup or reload saved image adjustments. The [Markdown manual](./MANUAL.md) is also included in the portable ZIP.
 
 ## Scope and safeguards
 
@@ -26,7 +26,19 @@ Install [AutoHotkey v2](https://www.autohotkey.com/) only if you want to run the
 
 Run `AutoHotkey64.exe FldigiLogbookCleaner.ahk --preview` for the built-in synthetic chart, or `AutoHotkey64.exe Cleaner.Tests.ahk` for disposable-file tests. Use the full path to `AutoHotkey64.exe` if it is not on your PATH. To use the supplied practice PNGs from source, replace `.\FldigiImageTools.exe` in the [manual's preview command](./MANUAL.md#practice-with-synthetic-images) with `AutoHotkey64.exe FldigiLogbookCleaner.ahk`.
 
-To build the portable app, run [Ahk2Exe](https://github.com/AutoHotkey/Ahk2Exe) from the source folder with `FldigiLogbookCleaner.ahk` as input, `FldigiImageTools.exe` as output, and the [AutoHotkey v2.0.30](https://github.com/AutoHotkey/AutoHotkey/releases/tag/v2.0.30) x64 `AutoHotkey64.exe` as the base. Keep `Cleaner.ini` and the `examples` folder beside the result.
+## Building the v1.0 portable EXE
+
+Start from the [v1.0 source](https://github.com/BattleHook/fldigi-image-tools/tree/v1.0). In that folder, create `BuildRelease.ahk` with the Windows product and version metadata used for the release:
+
+```ahk
+;@Ahk2Exe-SetProductName FLdigi Image Tools
+;@Ahk2Exe-SetDescription FLdigi Image Tools
+;@Ahk2Exe-SetFileVersion 1.0.0.0
+;@Ahk2Exe-SetProductVersion 1.0.0.0
+#Include FldigiLogbookCleaner.ahk
+```
+
+In [Ahk2Exe](https://github.com/AutoHotkey/Ahk2Exe), select `BuildRelease.ahk` as the source, `FldigiImageTools.exe` as the destination, and the [AutoHotkey v2.0.30](https://github.com/AutoHotkey/AutoHotkey/releases/tag/v2.0.30) x64 `AutoHotkey64.exe` as the base. Use **no compression**. The source entry point embeds the included chart icon. Keep `Cleaner.ini` and the `examples` folder beside the result. These settings reproduce the release configuration, not necessarily a byte-for-byte identical executable.
 
 ## Support and license
 
