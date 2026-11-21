@@ -52,6 +52,33 @@ CleanerConfig(path) {
 
 CleanerExpand(value) => StrReplace(Trim(value), "{profile}", EnvGet("USERPROFILE"), false)
 
+CleanerSavePaths(ini, logPath, folder, original) {
+    logPath := Trim(logPath), folder := Trim(folder)
+    expandedLog := CleanerExpand(logPath), root := RTrim(CleanerExpand(folder), "\")
+    if !CleanerLocalPath(expandedLog) || !RegExMatch(expandedLog, "i)\.adi(f)?$")
+        throw Error("Choose a local .adi or .adif logbook file.")
+    if !CleanerLocalPath(root)
+        throw Error("Choose a local WEFAX image folder.")
+    if InStr(FileGetAttrib(ini), "R")
+        throw Error("Cleaner.ini is read-only.")
+    SplitPath(ini, , &parent)
+    stage := CleanerTemp(parent)
+    try {
+        CleanerWrite(stage, original)
+        IniWrite(logPath, stage, "Logbook", "Path")
+        IniWrite(folder, stage, "Rule WEFAX", "Folder")
+        config := CleanerConfig(stage)
+        handle := CleanerRead(ini, true)
+        try {
+            if !CleanerEqual(original, CleanerReadHandle(handle))
+                throw Error("Cleaner.ini changed. Reopen Settings and try again.")
+            CleanerReplace(stage, ini)
+            stage := ""
+        } finally DllCall("CloseHandle", "Ptr", handle)
+        return config
+    } finally CleanerDiscard(stage)
+}
+
 CleanerSafeRelative(value) {
     return value != "" && !RegExMatch(value, '[^\x20-\x7E]|[<>:"/|?*]')
         && !RegExMatch(value, "(^|\\)(?:\\|$)|[. ](?:\\|$)")

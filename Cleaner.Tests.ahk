@@ -63,6 +63,8 @@ try {
     Check(FileExist(images "\kept.png"), "image was not touched")
     TestWefax(config, images, root)
     TestWefaxDialogFolders(root, images)
+    TestSettings(ini, root)
+    TestCleanupControls()
     if A_Args.Length && A_Args[1] != "--simulate-cleanup-failure"
         TestCopiedWefax(A_Args[1])
     if A_Args.Length && A_Args[1] = "--simulate-cleanup-failure" {
@@ -91,6 +93,61 @@ try {
 if !exitCode
     FileAppend("PASS: cleanup regressions, Auto Align and tilt, PNG/JSON export, and byte-exact ADIF update and backup.`n", "*")
 ExitApp(exitCode)
+#Include FldigiLogbookCleaner.ahk
+#Warn LocalSameAsGlobal, Off
+
+TestCleanupControls() {
+    app := CleanerWindow(true, [])
+    try {
+        app.Scan()
+        app.CheckRows(true)
+        first := app.list.GetNext(0, "Checked")
+        Check(first = 1 && app.list.GetNext(first, "Checked") = 2 && !app.applyButton.Enabled,
+            "Check All checks the scan results without applying anything")
+        app.CheckRows(false)
+        Check(!app.list.GetNext(0, "Checked") && !app.uncheckAllButton.Enabled,
+            "Uncheck All clears every checkmark")
+        Check(!app.backupButton.Enabled, "backup folder action starts disabled")
+        browser := app.gui.AddListView("", ["Capture"])
+        images := []
+        for name in ["duplicate.png", "previous.png", "duplicate.png", "next.png"] {
+            images.Push({path: name})
+            browser.Add("", name)
+        }
+        browser.Modify(3, "Select Focus")
+        app.RemoveBrowserRows(browser, images, 3)
+        Check(images.Length = 2 && browser.GetNext() = 1 && browser.GetText(1) = "previous.png",
+            "after removing duplicate links, the previous surviving capture is selected")
+        app.RemoveBrowserRows(browser, images, 1)
+        Check(images.Length = 1 && browser.GetNext() = 1 && browser.GetText(1) = "next.png",
+            "recycling the first capture selects the first surviving row")
+    } finally app.gui.Destroy()
+}
+
+TestSettings(ini, root) {
+    IniWrite("keep me", ini, "Extra", "Marker")
+    original := CleanerRead(ini)
+    newLog := root "\other log.adif", newFolder := root "\Other images"
+    RequireError(() => CleanerSavePaths(ini, root "\not-adif.txt", newFolder, original), "local .adi or .adif")
+    RequireError(() => CleanerSavePaths(ini, newLog, "relative\WEFAX", original), "local WEFAX")
+    Check(CleanerEqual(original, CleanerRead(ini)), "invalid paths leave the INI unchanged")
+    IniWrite("external edit", ini, "Extra", "Marker")
+    current := CleanerRead(ini)
+    RequireError(() => CleanerSavePaths(ini, newLog, newFolder, original), "changed")
+    Check(CleanerEqual(current, CleanerRead(ini)), "stale settings do not overwrite an external edit")
+    FileSetAttrib("+R", ini)
+    try {
+        RequireError(() => CleanerSavePaths(ini, newLog, newFolder, current), "read-only")
+        Check(CleanerEqual(current, CleanerRead(ini)), "read-only INI stays unchanged")
+    } finally FileSetAttrib("-R", ini)
+    CleanerSavePaths(ini, newLog, newFolder, current)
+    config := CleanerConfig(ini)
+    Check(config.log = newLog && config.rules[1].root = newFolder, "both settings persist and reload")
+    Check(IniRead(ini, "Extra", "Marker") = "external edit" && config.rules[1].mode = "FAX"
+        && config.rules[1].prefix = "RX:", "other settings are preserved")
+    Check(!FileExist(newLog) && !DirExist(newFolder), "saving settings does not create a logbook or image folder")
+    FileAppend("PASS: Settings saves paths, preserves other keys, and rejects invalid, stale, and read-only INIs.`n", "*")
+}
 
 TestWefax(config, images, root) {
     image := WefaxDemo()
@@ -180,6 +237,14 @@ TestWefax(config, images, root) {
             "zoom crosshair maps to the selected source row and column after cropping")
         Check(WefaxZoomRegion(cropped, -1, cropped.width).column = -1,
             "a column outside the crop is not marked")
+        wider := WefaxZoomRegion(cropped, 32, 90, 1)
+        whole := WefaxZoomRegion(cropped, 32, 90, 4)
+        Check(wider.image.width > zoom.image.width && wider.image.height > zoom.image.height
+            && wider.left + wider.column = 90 && wider.top + wider.row = 32,
+            "zooming out shows more source pixels without moving the guide")
+        Check(whole.image.width = cropped.width && whole.image.height = cropped.height
+            && whole.left = 0 && whole.top = 0 && whole.row = 32 && whole.column = 90,
+            "fully zoomed out fits the entire cropped chart")
         editor.RenderPreview()
         Check(editor.SelectPreviewPoint(45, 16, 170, 120)
             && editor.stepRow = 41 && editor.zoomColumn = 97
@@ -193,6 +258,20 @@ TestWefax(config, images, root) {
             && editor.stepRow = 40 && editor.zoomColumn = 40
             && editor.stepPicker.Text = "Row 41 / -3 px" && editor.steps.Length = 1,
             "clicking the zoom selects an existing row and column without changing the shift")
+        editor.ApplyWheel("row", 1)
+        Check(editor.stepRow = 30 && editor.zoomColumn = 40 && editor.steps.Length = 1,
+            "wheel up moves ten rows earlier without moving the column or editing corrections")
+        editor.ApplyWheel("row", -1)
+        editor.ApplyWheel("shift", 1)
+        Check(editor.steps[1].row = 40 && editor.steps[1].shift = -2,
+            "wheel up adds five visible shift pixels; got row " editor.stepRow
+            ", shift " editor.steps[1].shift ", count " editor.steps.Length)
+        editor.ApplyWheel("shift", -1)
+        Check(editor.stepPicker.Text = "Row 41 / -3 px", "wheel down subtracts five visible shift pixels")
+        editor.ApplyWheel("zoom", -20)
+        Check(editor.zoomLevel = 4, "zoom-out stops at the full chart")
+        editor.ApplyWheel("zoom", 20)
+        Check(editor.zoomLevel = 0, "zoom-in stops at the original magnification")
         Check(InStr(editor.originalLabel.Text, "360 x 260 px") && InStr(editor.adjustedLabel.Text, "340 x 240 px"),
             "preview labels show original and cropped output dimensions")
         Check(cropped.width = image.width - 20 && cropped.height = image.height - 20,
@@ -317,6 +396,8 @@ TestWefaxRecipe(root, source, log, original, snapshot) {
 
 TestWefaxDialogFolders(root, images) {
     prefs := root "\preferences.ini"
+    Check(WefaxJsonExportName(images "\surface.chart.png") = "surface.chart.json",
+        "the JSON default keeps the original stem, including internal dots")
     Check(WefaxDialogStart(prefs, "json") = "" && WefaxDialogStart(prefs, "png", "chart_adjusted.png") = "chart_adjusted.png",
         "first use keeps the native folder default and suggested filename")
     WefaxRememberDialogFolder(prefs, "json", root "\recipe.json")

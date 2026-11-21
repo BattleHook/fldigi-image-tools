@@ -4,13 +4,15 @@
 
 Extract the package to a writable folder, keep [`Cleaner.ini`](./Cleaner.ini) beside `FldigiImageTools.exe`, and double-click `FldigiImageTools.exe`. No installer or separate AutoHotkey installation is required. If you have only the source files, see [Running from source](https://github.com/BattleHook/fldigi-image-tools#running-from-source).
 
-**Where to change FLdigi paths:** The app displays the ADIF logbook path as read-only and has no Settings dialog for these paths. If the defaults match your FLdigi setup, leave them as they are. Otherwise, open [`Cleaner.ini`](./Cleaner.ini) in a text editor and change `Path` under `[Logbook]` for the ADIF file or `Folder` under `[Rule WEFAX]` for the PNG folder. Save the file, then click **Scan** to use the new paths. No restart is required.
+**Where to change FLdigi paths:** If the defaults match your setup, leave them as they are. Otherwise, use **Settings** to enter or browse for the ADIF logbook file and WEFAX image folder. **Save** updates [`Cleaner.ini`](./Cleaner.ini) beside the app and clears the previous scan results; click **Scan** to use the new paths without restarting. **Cancel** leaves the settings unchanged. The app must be able to write to its own folder to save settings. You can still edit the INI directly for advanced options.
 
 ## 1. Clean up missing-image entries
 
 1. Click **Scan**. It reads the logbook without modifying it.
 2. Select a result to see the full path. Check only the entries you want to remove.
 3. Close FLdigi. Click **Apply selected removals** and confirm. The tool rechecks the selection and saves a timestamped `.bak` beside the logbook before replacing it.
+
+**Check All** and **Uncheck All** only change checkmarks. After a successful cleanup, **Open Backup Folder** opens the folder containing the backup made by that cleanup.
 
 If FLdigi puts a `File:` line before the ADIF header, the tool preserves that line during cleanup. You do not need to edit the logbook before scanning.
 
@@ -26,9 +28,11 @@ To undo a cleanup, close FLdigi and save a separate copy of the current ADIF bef
 4. Crop unwanted edges using the four **Crop** controls.
 5. **Save PNG As** suggests `<original-name>_adjusted.png` and exports the corrected pixels without guides or a logbook change. To link a separate `_enh.png` in the same log entry instead, close FLdigi and choose **Save Enhanced + Log**. Both leave the original intact.
 
-**Export JSON** saves the adjustments, not the image. To resume, open the same original image and choose **Import JSON**. JSON import/export share their last-used folder; PNG export remembers a different one.
+With the guide visible, scroll over the adjusted image or the **Step Zoom** window to move ten rows per notch: up for earlier rows, down for later rows. Over either **Shift** button, wheel up increases the visible shift by five pixels and wheel down decreases it by five. In **Step Zoom**, hold **Ctrl** and scroll down to zoom out as far as the whole cropped chart; scroll up to return to the starting magnification.
 
-In the image browser, **Move to Recycle Bin** moves only the original PNG. Close FLdigi first and confirm the displayed path. The app reads the logbook to verify the link but **does not write to it**: `NOTES` keeps the original `RX:` path and any existing `ENH:` link. The enhanced PNG, if present, stays where it is.
+**Export JSON** saves the adjustments, not the image. It suggests the original capture's filename with a `.json` extension. To resume, open the same original image and choose **Import JSON**. JSON import/export share their last-used folder; PNG export remembers a different one.
+
+In the image browser, **Move to Recycle Bin** moves only the original PNG. Close FLdigi first and confirm the displayed path. The browser selects the previous remaining image, or the first remaining image if there is no previous one. The app reads the logbook to verify the link but **does not write to it**: `NOTES` keeps the original `RX:` path and any existing `ENH:` link. The enhanced PNG, if present, stays where it is.
 
 On the next **Scan**, an existing enhanced PNG at a valid `ENH:` link keeps the entry off the cleanup list. If the original is gone and there is no enhanced image still linked and present, the entry can be listed for review. It is not removed unless you select it and confirm **Apply selected removals**.
 

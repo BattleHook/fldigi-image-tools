@@ -32,7 +32,8 @@ class CleanerWindow {
         this.title := "FLdigi Image Tools" (preview ? " - isolated preview" : "")
         this.ini := A_ScriptDir "\Cleaner.ini"
         this.rows := []
-        this.gui := Gui("+Resize +MinSize620x430", this.title)
+        this.lastBackup := ""
+        this.gui := Gui("+Resize +MinSize620x460", this.title)
         this.gui.BackColor := "343434"
         this.gui.MarginX := 20
         this.gui.MarginY := 16
@@ -44,10 +45,16 @@ class CleanerWindow {
         this.gui.SetFont("s10 norm cFFD060", "Segoe UI")
         this.gui.AddText("x20 y51 w580 h24", "IMAGE LOG REVIEW  /  HAM SHACK UTILITIES")
         this.gui.SetFont("s10 norm cWhite", "Segoe UI")
-        this.gui.AddText("x20 y86 w580 h22", "ADIF LOGBOOK")
+        this.gui.AddText("x20 y86 w280 h22", "ADIF LOGBOOK")
+        this.settingsButton := this.gui.AddButton("x496 y79 w104 h27", "SETTINGS")
+        this.settingsButton.OnEvent("Click", ObjBindMethod(this, "OpenSettings"))
         this.logPath := this.gui.AddEdit("x20 y111 w580 h27 ReadOnly cBlack",
             preview ? "Synthetic logbook - no station files" : this.ini)
-        this.summary := this.gui.AddText("x20 y156 w580 h26", "Scan the logbook to look for missing images.")
+        this.summary := this.gui.AddText("x20 y148 w368 h38", "Scan the logbook to look for missing images.")
+        this.checkAllButton := this.gui.AddButton("x396 y151 w96 h28 Disabled", "Check All")
+        this.checkAllButton.OnEvent("Click", ObjBindMethod(this, "CheckRows", true))
+        this.uncheckAllButton := this.gui.AddButton("x500 y151 w100 h28 Disabled", "Uncheck All")
+        this.uncheckAllButton.OnEvent("Click", ObjBindMethod(this, "CheckRows", false))
         this.list := this.gui.AddListView("x20 y189 w580 h140 Checked -Multi NoSortHdr Background272727 cWhite",
             ["Date / time (UTC)", "Mode", "Missing image", "Path checked"])
         this.list.OnEvent("ItemCheck", ObjBindMethod(this, "SelectionChanged"))
@@ -61,6 +68,8 @@ class CleanerWindow {
         this.status := this.gui.AddText("x20 y401 w580 h42",
             "Read-only until Apply. Close FLdigi before applying changes.")
         this.gui.SetFont("s10 cWhite", "Segoe UI")
+        this.backupButton := this.gui.AddButton("x434 y397 w166 h28 Disabled", "Open Backup Folder")
+        this.backupButton.OnEvent("Click", ObjBindMethod(this, "OpenBackupFolder"))
         this.scanButton := this.gui.AddButton("x20 y453 w116 h32 Default", "SCAN")
         this.scanButton.OnEvent("Click", ObjBindMethod(this, "Scan"))
         this.applyButton := this.gui.AddButton("x144 y453 w220 h32 Disabled", "APPLY SELECTED REMOVALS")
@@ -79,7 +88,7 @@ class CleanerWindow {
         scale := A_ScreenDPI / 96
         width := Min(980, Floor((right - left) / scale) - 48)
         height := Min(570, Floor((bottom - top) / scale) - 70)
-        this.gui.Show("w" Max(620, width) " h" Max(430, height))
+        this.gui.Show("w" Max(620, width) " h" Max(460, height))
         if this.preview {
             this.Scan()
         } else {
@@ -94,13 +103,17 @@ class CleanerWindow {
             return
         inner := width - 40
         footer := height - 122
+        this.settingsButton.Move(width - 124)
         this.logPath.Move(, , inner)
-        this.summary.Move(, , inner)
+        this.summary.Move(, , inner - 212)
+        this.checkAllButton.Move(width - 224)
+        this.uncheckAllButton.Move(width - 120)
         this.list.Move(, , inner, footer - 224)
         this.list.ModifyCol(4, Max(115, inner - 570))
         this.caption.Move(, footer - 13, inner)
         this.captionLabel.Move(, footer - 35, inner)
-        this.status.Move(, footer + 24, inner)
+        this.status.Move(, footer + 24, inner - 174)
+        this.backupButton.Move(width - 186, footer + 20)
         this.scanButton.Move(, height - 48)
         this.applyButton.Move(, height - 48)
         this.imagesButton.Move(, height - 48)
@@ -113,7 +126,87 @@ class CleanerWindow {
         this.rows := []
         this.list.Delete()
         this.caption.Value := ""
-        this.applyButton.Enabled := false
+        this.SelectionChanged()
+    }
+
+    OpenSettings(*) {
+        try {
+            original := this.preview ? 0 : CleanerRead(this.ini)
+            logValue := this.preview ? "C:\Demo\fldigi.files\logs\logbook.adi" : IniRead(this.ini, "Logbook", "Path", "")
+            folder := this.preview ? "C:\Demo\fldigi\WEFAX" : IniRead(this.ini, "Rule WEFAX", "Folder", "")
+            dialog := Gui("+Owner" this.gui.Hwnd, "FLdigi Image Tools - Settings")
+            dialog.BackColor := "343434"
+            dialog.MarginX := 20
+            dialog.MarginY := 16
+            dialog.SetFont("s10 cWhite", "Segoe UI")
+            dialog.AddText("w556", "ADIF LOGBOOK FILE")
+            logEdit := dialog.AddEdit("xm w452 cBlack", logValue)
+            logBrowse := dialog.AddButton("x+8 yp w96", "Browse...")
+            dialog.AddText("xm y+16 w556", "WEFAX IMAGE FOLDER")
+            folderEdit := dialog.AddEdit("xm w452 cBlack", folder)
+            folderBrowse := dialog.AddButton("x+8 yp w96", "Browse...")
+            notice := dialog.AddText("xm y+14 w556 h50 cFFD060", this.preview
+                ? "ISOLATED PREVIEW - sample paths only. Saving is disabled."
+                : "Changes are saved to Cleaner.ini beside the app. No restart is needed.")
+            save := dialog.AddButton("xm y+6 w100 h30 Default", "Save")
+            cancel := dialog.AddButton("x+8 yp w100 h30", "Cancel")
+            close := (*) => this.CloseSettings(dialog)
+            dialog.OnEvent("Close", close)
+            dialog.OnEvent("Escape", close)
+            cancel.OnEvent("Click", close)
+            save.OnEvent("Click", (*) => this.SaveSettings(dialog, notice, original, logEdit.Value, folderEdit.Value))
+            logBrowse.OnEvent("Click", (*) => this.BrowseSetting(dialog, logEdit, false, notice))
+            folderBrowse.OnEvent("Click", (*) => this.BrowseSetting(dialog, folderEdit, true, notice))
+            if this.preview
+                save.Enabled := logBrowse.Enabled := folderBrowse.Enabled := false
+            this.gui.Opt("+Disabled")
+            try WefaxShowRelative(dialog, this.gui.Hwnd)
+            catch {
+                close.Call()
+                throw
+            }
+        } catch as problem {
+            this.Report(problem, "Opening Settings")
+        }
+    }
+
+    BrowseSetting(dialog, edit, folder, notice) {
+        try {
+            dialog.Opt("+OwnDialogs")
+            path := CleanerExpand(edit.Value)
+            selected := folder ? DirSelect(DirExist(path) ? "*" path : "", 0, "Choose the WEFAX image folder")
+                : FileSelect(3, path, "Choose the FLdigi logbook", "ADIF files (*.adi; *.adif)")
+            if selected != ""
+                edit.Value := selected
+        } catch as problem {
+            this.ReportSettings(notice, problem, "Browsing for a path")
+        }
+    }
+
+    SaveSettings(dialog, notice, original, logValue, folder) {
+        if this.preview
+            return
+        try config := CleanerSavePaths(this.ini, logValue, folder, original)
+        catch as problem {
+            this.ReportSettings(notice, problem, "Could not save settings")
+            return
+        }
+        this.Clear()
+        this.logPath.Value := config.log
+        this.summary.Text := "Scan the logbook to look for missing images."
+        this.status.Text := "Settings saved. Click Scan to use the new paths."
+        this.CloseSettings(dialog)
+    }
+
+    ReportSettings(notice, problem, context) {
+        CleanerReport(problem, context)
+        notice.Text := context ": " problem.Message
+    }
+
+    CloseSettings(dialog) {
+        this.gui.Opt("-Disabled")
+        dialog.Destroy()
+        WinActivate("ahk_id " this.gui.Hwnd)
     }
 
     Scan(*) {
@@ -160,6 +253,7 @@ class CleanerWindow {
             time := RegExReplace(row.time, "^(\d{2})(\d{2})(\d{2})?$", "$1:$2")
             this.list.Add("", date " " time, row.mode, row.file, row.path)
         }
+        this.SelectionChanged()
     }
 
     ShowPath(list, row, selected) {
@@ -168,7 +262,15 @@ class CleanerWindow {
     }
 
     SelectionChanged(*) {
-        this.applyButton.Enabled := !this.preview && !!this.list.GetNext(0, "Checked")
+        checked := !!this.list.GetNext(0, "Checked")
+        this.checkAllButton.Enabled := this.rows.Length > 0
+        this.uncheckAllButton.Enabled := checked
+        this.applyButton.Enabled := !this.preview && checked
+    }
+
+    CheckRows(check, *) {
+        this.list.Modify(0, check ? "Check" : "-Check")
+        this.SelectionChanged()
     }
 
     BrowseImages(*) {
@@ -257,21 +359,29 @@ class CleanerWindow {
                 "WEFAX Images", "YesNo Default2 Icon! Owner" browser.Hwnd) != "Yes"
                 return
             CleanerRecycleOriginal(config, snapshot, row, CleanerRequireFldigiClosed, CleanerWindowsRecycle)
-            Loop images.Length {
-                at := images.Length - A_Index + 1
-                if images[at].path = row.path {
-                    images.RemoveAt(at)
-                    list.Delete(at)
-                }
-            }
-            if images.Length
-                list.Modify(Min(index, images.Length), "Select Focus")
+            this.RemoveBrowserRows(list, images, index)
             update.Call()
             status.Text := "Original recycled. Log and enhanced image unchanged. Scan again to review cleanup candidates."
         } catch as problem {
             CleanerReport(problem, "Recycling WEFAX original")
             status.Text := problem.Message
         }
+    }
+
+    RemoveBrowserRows(list, images, index) {
+        path := images[index].path
+        previous := index - 1
+        Loop images.Length {
+            at := images.Length - A_Index + 1
+            if images[at].path = path {
+                if at < index
+                    previous--
+                images.RemoveAt(at)
+                list.Delete(at)
+            }
+        }
+        if images.Length
+            list.Modify(Max(1, previous), "Select Focus Vis")
     }
 
     OpenImage(browser, status, config, snapshot, images, index) {
@@ -315,11 +425,24 @@ class CleanerWindow {
                 this.title, "YesNo Default2 Icon!") != "Yes"
                 return
             backup := CleanerApply(this.config, this.snapshot, selected, CleanerRequireFldigiClosed)
+            this.lastBackup := backup
+            this.backupButton.Enabled := true
             this.Scan()
             this.status.Text := "Removed " selected.Count " record(s). Backup saved beside the logbook."
             this.caption.Value := backup
         } catch as problem {
             this.Report(problem, "Apply")
+        }
+    }
+
+    OpenBackupFolder(*) {
+        if this.lastBackup = ""
+            return
+        try {
+            SplitPath(this.lastBackup, , &folder)
+            Run('"' A_WinDir '\explorer.exe" "' folder '"')
+        } catch as problem {
+            this.Report(problem, "Opening backup folder")
         }
     }
 

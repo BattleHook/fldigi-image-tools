@@ -1,8 +1,6 @@
 # Updates
 
-## Planned for the next update
-
-These improvements are planned, not included in v1.01. No version or release date has been assigned.
+## v1.02
 
 - Use the original capture's filename as the default for JSON exports, with a `.json` extension.
 - Use the mouse wheel over the **Shift -** and **Shift +** buttons for faster shift adjustments.
@@ -11,6 +9,7 @@ These improvements are planned, not included in v1.01. No version or release dat
 - Add **Check All** and **Uncheck All** to the missing-image results. Neither button applies removals.
 - Increase the Step Zoom zoom-out range when using **Ctrl + mouse wheel**.
 - Add an **Open Backup Folder** button after cleanup.
+- Add a **Settings** dialog to change the ADIF logbook path and WEFAX image folder without opening `Cleaner.ini` in a text editor.
 
 ## v1.01
 

@@ -355,8 +355,13 @@ WefaxBitmap(image) {
     return bitmap
 }
 
-WefaxZoomRegion(image, row, column) {
-    width := Min(120, image.width), height := Min(64, image.height)
+WefaxZoomRegion(image, row, column, level := 0) {
+    if level = 4
+        return {image: image, left: 0, top: 0,
+            row: row >= 0 && row < image.height ? row : -1,
+            column: column >= 0 && column < image.width ? column : -1}
+    factor := 2 ** level
+    width := Min(120 * factor, image.width), height := Min(64 * factor, image.height)
     left := Max(0, Min(image.width - width, column - width // 2))
     top := Max(0, Min(image.height - height, row - height // 2))
     pixels := Buffer(width * height * 4)

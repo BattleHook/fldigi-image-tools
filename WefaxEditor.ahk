@@ -77,6 +77,13 @@ WefaxPngExportName(sourcePath) {
     return stem "_adjusted.png"
 }
 
+WefaxJsonExportName(sourcePath) {
+    if sourcePath = ""
+        return "wefax-adjusted.json"
+    SplitPath(sourcePath, , , , &stem)
+    return stem ".json"
+}
+
 WefaxDialogStart(prefs, kind, filename := "") {
     folder := IniRead(prefs, "LastFolder", kind, "")
     return (folder != "" && DirExist(folder) ? RTrim(folder, "\") "\" : "") filename
@@ -120,12 +127,16 @@ class WefaxEditor {
         this.image := image, this.saveAction := save
         this.refreshAction := refresh
         this.pngExportName := WefaxPngExportName(sourcePath)
+        this.jsonExportName := WefaxJsonExportName(sourcePath)
         this.steps := []
         this.track := []
         this.stepRow := Min(1, image.height - 1)
         this.markStep := false
         this.zoomColumn := image.width // 2
         this.zoomGui := 0
+        this.zoomLevel := 0
+        this.wheelRemainder := 0
+        this.wheelAction := ""
         this.requireClosed := requireClosed
         options := "+Resize +MinSize820x430"
         if owner
@@ -165,6 +176,8 @@ class WefaxEditor {
             this.stepButtons.Push(button)
         }
         this.stepEnabled := this.gui.AddCheckbox("x748 y412 w60 h21 Disabled", "Apply")
+        this.wheelHandler := ObjBindMethod(this, "MouseWheel")
+        OnMessage(0x020A, this.wheelHandler)
         this.stepEnabled.OnEvent("Click", ObjBindMethod(this, "ToggleStep"))
         this.gui.AddText("x20 y453 w90", "Crop Top")
         this.gui.AddText("x306 y453 w96", "Crop Bottom")
@@ -578,9 +591,48 @@ class WefaxEditor {
         this.UpdateStepControls()
     }
 
+    MouseWheel(wParam, *) {
+        MouseGetPos(, , &hoverWindow, &hoverControl, 2)
+        ctrl := wParam & 0x0008
+        if hoverWindow = this.gui.Hwnd && !ctrl
+            && (hoverControl = this.stepButtons[3].Hwnd || hoverControl = this.stepButtons[4].Hwnd)
+            && this.stepButtons[3].Enabled
+            action := "shift"
+        else if this.zoomGui && hoverWindow = this.zoomGui.Hwnd
+            action := ctrl ? "zoom" : "row"
+        else if hoverWindow = this.gui.Hwnd && hoverControl = this.adjusted.Hwnd && this.markStep && !ctrl
+            action := "row"
+        else {
+            this.wheelAction := "", this.wheelRemainder := 0
+            return
+        }
+        if this.wheelAction != action
+            this.wheelAction := action, this.wheelRemainder := 0
+        delta := (wParam >> 16) & 0xFFFF
+        this.wheelRemainder += delta >= 0x8000 ? delta - 0x10000 : delta
+        ticks := (Abs(this.wheelRemainder) // 120) * (this.wheelRemainder < 0 ? -1 : 1)
+        if ticks {
+            this.wheelRemainder -= ticks * 120
+            this.ApplyWheel(action, ticks)
+        }
+        return 0
+    }
+
+    ApplyWheel(action, ticks) {
+        if action = "shift"
+            this.NudgeStep("shift", 5 * ticks)
+        else if action = "row"
+            this.NudgeStep("row", -10 * ticks)
+        else if action = "zoom" {
+            this.zoomLevel := Max(0, Min(4, this.zoomLevel - ticks))
+            this.Render()
+        }
+    }
+
     ShowStepZoom(*) {
         opening := !this.zoomGui
         if opening {
+            this.zoomLevel := 0
             this.zoomGui := Gui("+Owner" this.gui.Hwnd, "WEFAX Step Zoom")
             this.zoomGui.BackColor := "343434"
             this.zoomGui.SetFont("s10 cWhite", "Segoe UI")
@@ -614,7 +666,7 @@ class WefaxEditor {
     }
 
     RenderStepZoom(image, crop) {
-        region := WefaxZoomRegion(image, this.stepRow - crop.top, this.zoomColumn - crop.left)
+        region := WefaxZoomRegion(image, this.stepRow - crop.top, this.zoomColumn - crop.left, this.zoomLevel)
         scale := A_ScreenDPI / 96
         bitmap := WefaxPreviewBitmap(region.image, Floor(480 * scale), Floor(256 * scale),
             region.row, region.column, true)
@@ -624,7 +676,7 @@ class WefaxEditor {
             width: region.image.width, height: region.image.height}
         this.zoomStatus.Text := "Row " (this.stepRow + 1) " | Column " (this.zoomColumn + 1)
             . (region.row < 0 || region.column < 0 ? " (guide outside crop)" : "")
-            . "`nClick either preview to select a row and column."
+            . "`nClick to place guide | Wheel: rows | Ctrl+wheel: zoom"
     }
 
     CloseStepZoom(*) {
@@ -684,7 +736,7 @@ class WefaxEditor {
             } else {
                 writer := WefaxWriteRecipeText.Bind(this.RecipeText())
                 label := "JSON recipe (*.json)"
-                suggestedName := "wefax-adjusted.json"
+                suggestedName := this.jsonExportName
             }
             this.gui.Opt("+OwnDialogs")
             path := FileSelect("S", WefaxDialogStart(this.DialogPrefs(), ext, suggestedName),
@@ -784,6 +836,7 @@ class WefaxEditor {
 
     Close(*) {
         SetTimer(this.renderTimer, 0)
+        OnMessage(0x020A, this.wheelHandler, 0)
         if this.zoomGui
             this.zoomGui.Destroy()
         this.gui.Destroy()
