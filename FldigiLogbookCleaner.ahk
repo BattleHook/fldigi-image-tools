@@ -7,13 +7,14 @@
 #Include WefaxEditor.ahk
 
 OnError(CleanerUnhandled)
-if A_Args.Length && A_Args[1] != "--preview"
-    throw ValueError("Usage: FldigiLogbookCleaner.ahk [--preview [copied-PNG-path ...]]")
+linkedPreview := A_Args.Length && A_Args[1] = "--preview-linked"
+if A_Args.Length && ((linkedPreview && A_Args.Length != 3) || (!linkedPreview && A_Args[1] != "--preview"))
+    throw ValueError("Usage: FldigiLogbookCleaner.ahk [--preview [copied-PNG-path ...] | --preview-linked original.png enhanced.png]")
 previewImages := A_Args.Clone()
 if previewImages.Length
     previewImages.RemoveAt(1)
 TraySetIcon(A_IsCompiled ? A_ScriptFullPath : A_ScriptDir "\FldigiImageTools.ico", 1, true)
-window := CleanerWindow(A_Args.Length > 0, previewImages)
+window := CleanerWindow(A_Args.Length > 0, previewImages, linkedPreview)
 window.Show()
 
 CleanerUnhandled(problem, mode) {
@@ -26,9 +27,10 @@ CleanerUnhandled(problem, mode) {
 }
 
 class CleanerWindow {
-    __New(preview, previewImages) {
+    __New(preview, previewImages, linkedPreview := false) {
         this.preview := preview
         this.previewImages := previewImages
+        this.linkedPreview := linkedPreview
         this.title := "FLdigi Image Tools" (preview ? " - isolated preview" : "")
         this.ini := A_ScriptDir "\Cleaner.ini"
         this.rows := []
@@ -75,7 +77,7 @@ class CleanerWindow {
         this.applyButton := this.gui.AddButton("x144 y453 w220 h32 Disabled", "APPLY SELECTED REMOVALS")
         this.applyButton.OnEvent("Click", ObjBindMethod(this, "Apply"))
         this.imagesButton := this.gui.AddButton("x372 y453 w116 h32", "WEFAX IMAGES")
-        this.imagesButton.OnEvent("Click", ObjBindMethod(this, "BrowseImages"))
+        this.imagesButton.OnEvent("Click", (*) => this.BrowseImages())
         this.closeButton := this.gui.AddButton("x372 y453 w100 h32", "CLOSE")
         this.closeButton.OnEvent("Click", (*) => ExitApp())
         this.gui.OnEvent("Size", ObjBindMethod(this, "Resize"))
@@ -273,14 +275,16 @@ class CleanerWindow {
         this.SelectionChanged()
     }
 
-    BrowseImages(*) {
+    BrowseImages(initialRow := 1) {
         try {
             config := 0, snapshot := 0
             if this.preview {
                 images := []
                 for path in this.previewImages {
                     SplitPath(path, &filename)
-                    images.Push({file: filename, path: path, enhanced: ""})
+                    images.Push({file: filename, path: path, enhanced: this.linkedPreview ? this.previewImages[2] : ""})
+                    if this.linkedPreview
+                        break
                 }
                 images.Push({file: "synthetic_weather_chart.png", path: "", enhanced: ""})
             } else {
@@ -294,56 +298,86 @@ class CleanerWindow {
             browser := Gui("+Owner" this.gui.Hwnd, "WEFAX Images")
             browser.BackColor := "343434"
             browser.SetFont("s10 cWhite", "Segoe UI")
-            browser.AddText("w880", this.preview ? "Select a copied or synthetic PNG for the read-only preview."
+            work := WefaxOwnerWorkArea(this.gui.Hwnd), scale := A_ScreenDPI / 96
+            width := Min(1126, Floor((work.right - work.left) / scale) - 40)
+            panelWidth := Min(240, Floor((width - 340) / 2))
+            if panelWidth < 120 || Floor((work.bottom - work.top) / scale) < 455
+                throw Error("The current work area is too small for the two WEFAX preview panes.")
+            listWidth := width - 26 - 2 * panelWidth
+            originalX := listWidth + 24, enhancedX := originalX + panelWidth + 12
+            browser.AddText("w" width, this.preview ? "Select a copied or synthetic PNG for the read-only preview."
                 : "Select an existing log-linked PNG to preview or enhance.")
-            list := browser.AddListView("xm y44 w620 h280 -Multi NoSortHdr Background272727 cWhite", ["Original PNG", "ENH reference"])
+            list := browser.AddListView("xm y44 w" listWidth " h280 -Multi NoSortHdr Background272727 cWhite", ["Original PNG", "ENH reference"])
             for item in images
                 list.Add("", item.file, item.enhanced ? "Linked" : "")
-            list.ModifyCol(1, 465)
+            list.ModifyCol(1, listWidth - 155)
             list.ModifyCol(2, 130)
-            browser.AddText("x644 y44 w240", "SELECTED ORIGINAL")
-            thumb := browser.AddPicture("x644 y68 w240 h225")
-            details := browser.AddText("x644 y300 w240 h24", "")
+            original := this.AddThumbnail(browser, originalX, panelWidth, "SELECTED ORIGINAL")
+            enhanced := this.AddThumbnail(browser, enhancedX, panelWidth, "LINKED ENHANCED")
             notice := this.preview ? "ISOLATED PREVIEW - logbook updates and recycling are disabled."
                 : "Recycling moves only the original. Close FLdigi before recycling."
-            status := browser.AddText("xm y335 w880 h40 cFFD060", notice)
+            status := browser.AddText("xm y335 w" width " h40 cFFD060", notice)
             open := (*) => this.OpenImage(browser, status, config, snapshot, images, list.GetNext())
             browser.AddButton("xm y382 w144 Default", "OPEN IMAGE").OnEvent("Click", open)
             recycle := browser.AddButton("x168 y382 w190 Disabled", "MOVE TO RECYCLE BIN")
-            update := (*) => this.UpdateThumbnail(list, thumb, details, status, notice, recycle, images)
+            update := (*) => this.UpdateThumbnails(list, original, enhanced, status, notice, recycle, images)
             recycle.OnEvent("Click", (*) => this.RecycleImage(browser, list, status, config, snapshot, images, update))
             list.OnEvent("ItemSelect", update)
             browser.OnEvent("Close", (*) => browser.Destroy())
             list.OnEvent("DoubleClick", open)
-            list.Modify(1, "Select Focus")
+            list.Modify(initialRow, "Select Focus")
             update.Call()
             WefaxShowRelative(browser, this.gui.Hwnd)
+            return browser
         } catch as problem {
             this.Report(problem, "WEFAX images")
         }
     }
 
-    UpdateThumbnail(list, thumb, details, status, notice, recycle, images) {
+    AddThumbnail(browser, x, width, label) {
+        options := "x" x " w" width
+        browser.AddText(options " y44 h20", label)
+        return {x: x, width: width, image: browser.AddPicture(options " y68 h225"),
+            details: browser.AddText(options " y300 h24")}
+    }
+
+    DrawThumbnail(pane, image) {
+        scale := A_ScreenDPI / 96
+        bitmap := WefaxPreviewBitmap(image, Floor(pane.width * scale), Floor(225 * scale))
+        width := Max(1, Round(bitmap.width / scale)), height := Max(1, Round(bitmap.height / scale))
+        pane.image.Value := "HBITMAP:" bitmap.handle
+        pane.image.Move(pane.x + (pane.width - width) // 2, 68 + (225 - height) // 2, width, height)
+        pane.details.Text := image.width " x " image.height " px"
+    }
+
+    UpdateThumbnails(list, original, enhanced, status, notice, recycle, images) {
         index := list.GetNext()
-        thumb.Value := ""
-        details.Text := ""
+        for pane in [original, enhanced] {
+            pane.image.Value := ""
+            pane.details.Text := ""
+        }
         status.Text := notice
         recycle.Enabled := false
         if !images.Has(index)
             return
+        row := images[index]
         try {
-            row := images[index]
-            image := row.path = "" ? WefaxDemo() : WefaxLoad(row.path)
-            scale := A_ScreenDPI / 96
-            bitmap := WefaxPreviewBitmap(image, Floor(240 * scale), Floor(225 * scale))
-            width := Max(1, Round(bitmap.width / scale)), height := Max(1, Round(bitmap.height / scale))
-            thumb.Value := "HBITMAP:" bitmap.handle
-            thumb.Move(644 + (240 - width) // 2, 68 + (225 - height) // 2, width, height)
-            details.Text := image.width " x " image.height " px"
+            this.DrawThumbnail(original, row.path = "" ? WefaxDemo() : WefaxLoad(row.path))
             recycle.Enabled := !this.preview
         } catch as problem {
             CleanerReport(problem, "Loading WEFAX thumbnail")
             status.Text := "Thumbnail unavailable: " problem.Message
+        }
+        if row.enhanced = ""
+            enhanced.details.Text := "No linked enhancement"
+        else {
+            try this.DrawThumbnail(enhanced, WefaxLoad(row.enhanced))
+            catch as problem {
+                CleanerReport(problem, "Loading linked enhanced WEFAX thumbnail")
+                enhanced.details.Text := "Preview unavailable"
+                status.Text := status.Text = notice ? "Enhanced thumbnail unavailable: " problem.Message
+                    : status.Text "`nEnhanced thumbnail unavailable: " problem.Message
+            }
         }
     }
 

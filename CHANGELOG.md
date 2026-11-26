@@ -1,5 +1,9 @@
 # Updates
 
+## v1.03
+
+- Show the linked enhanced WEFAX image to the right of the selected original. The wider browser keeps both panes in place even when a capture has no enhancement.
+
 ## v1.02
 
 - Use the original capture's filename as the default for JSON exports, with a `.json` extension.

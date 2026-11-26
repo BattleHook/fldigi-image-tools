@@ -22,7 +22,7 @@ To undo a cleanup, close FLdigi and save a separate copy of the current ADIF bef
 
 ## 2. Correct a WEFAX image
 
-1. Choose **WEFAX Images**, select a chart, and click **Open Image**. Compare the original with the adjusted preview.
+1. Choose **WEFAX Images** and select a chart. The browser shows the original on the right, with its linked enhanced PNG alongside it when one is available. Click **Open Image** to compare the original with your current adjustments in the editor.
 2. Use **Tilt** for steady sideways drift and **Alignment** to move the seam. Try **Auto Tilt** or **Auto Align**, then fine-tune by 1 px (`<` / `>`) or 10 px (`<<` / `>>`).
 3. Use **Repair Steps** for sudden sideways jumps. Click the adjusted image to open **Step Zoom**. Use **Row −/+** to navigate and **Shift −/+** to correct; uncheck **Apply** to compare without the selected repair. **Track Line** can follow a clear vertical feature where it can identify it confidently. Review any automatic result.
 4. Crop unwanted edges using the four **Crop** controls.

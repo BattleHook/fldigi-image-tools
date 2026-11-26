@@ -96,6 +96,32 @@ ExitApp(exitCode)
 #Include FldigiLogbookCleaner.ahk
 #Warn LocalSameAsGlobal, Off
 
+TestLinkedThumbnails(source, target, originalImage, enhancedImage) {
+    app := CleanerWindow(true, [])
+    browser := Gui()
+    try {
+        list := browser.AddListView("-Multi", ["Fixture"])
+        for label in ["Linked", "Unlinked"]
+            list.Add("", label)
+        original := app.AddThumbnail(browser, 300, 200, "SELECTED ORIGINAL")
+        enhanced := app.AddThumbnail(browser, 512, 200, "LINKED ENHANCED")
+        status := browser.AddText(), recycle := browser.AddButton()
+        rows := [{path: source, enhanced: target}, {path: source, enhanced: ""}]
+        list.Modify(1, "Select")
+        app.UpdateThumbnails(list, original, enhanced, status, "Notice", recycle, rows)
+        ownSize := originalImage.width " x " originalImage.height " px"
+        Check(original.details.Text = ownSize && enhanced.details.Text = enhancedImage.width " x " enhancedImage.height " px",
+            "linked browser selection uses the actual enhanced PNG and its own dimensions")
+        list.Modify(2, "Select")
+        app.UpdateThumbnails(list, original, enhanced, status, "Notice", recycle, rows)
+        Check(original.details.Text = ownSize && enhanced.details.Text = "No linked enhancement"
+            && !SendMessage(0x173, 0, 0, enhanced.image.Hwnd), "unlinked selection clears the previous enhanced bitmap")
+    } finally {
+        browser.Destroy()
+        app.gui.Destroy()
+    }
+}
+
 TestCleanupControls() {
     app := CleanerWindow(true, [])
     try {
@@ -337,6 +363,7 @@ TestWefax(config, images, root) {
     savedImage := WefaxLoad(target)
     Check(savedImage.width = image.width - 3 && savedImage.height = image.height - 20
         && CleanerEqual(savedImage.pixels, adjusted.pixels), "saved PNG has the selected crop at original resolution")
+    TestLinkedThumbnails(source, target, image, savedImage)
     WriteText(root "\expected.adi", intro Record("FAX", "RX:weather.png`r`nENH:" target) ordinary)
     updated := CleanerRead(config.log)
     Check(CleanerEqual(updated, CleanerRead(root "\expected.adi")), "only the selected NOTES field changed")
